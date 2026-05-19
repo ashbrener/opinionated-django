@@ -334,7 +334,58 @@ pythonpath = ["src"]
 - Django's `QuerySet` typing beyond `.all()` is still thin. Keep chained queryset expressions inside the repository where you can annotate the return type as `list[SomeDTO]` and let the caller rely on that.
 - Pyrefly's Django support is **actively evolving**; re-check the docs when upgrading pyrefly and remove workarounds as they become unnecessary.
 
-## Step 9: Verify
+## Step 9: Local dev stack (`docker-compose.yml`)
+
+Postgres and Redis run as containers for local development. The application reads its connection strings from the env contract owned by the `dj-settings` skill (`DATABASE_URL`, `REDIS_URL`); no other dev-stack assumption travels into the Python code.
+
+Write `docker-compose.yml` at the project root.
+
+**Invariant: top-level `name: <project_slug>`.** Compose's default project name is derived from the directory the file lives in. When two unrelated projects each nest their backend under a directory called `backend/`, a bare `docker compose up` from either claims the same `backend` namespace — containers `backend-postgres-1`, volume `backend_postgres_data`, network `backend_default`. Whichever stack starts last writes into the shared Postgres data directory. Setting `name:` at the top level pins the Compose project namespace regardless of directory; this field is Compose v2.4+ and is non-optional.
+
+Replace `<project_slug>` with the kebab-case repo name (the same slug used as `name` in `pyproject.toml`).
+
+```yaml
+name: <project_slug>
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: <project_slug>
+      POSTGRES_USER: <project_slug>
+      POSTGRES_PASSWORD: <project_slug>
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U <project_slug>"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+```
+
+The `<project_slug>` substitution appears in four places — the top-level `name:`, the three `POSTGRES_*` env vars, and the `pg_isready -U` healthcheck. All four must agree.
+
+Remap host ports only when the host already runs a conflicting service on 5432 / 6379; keep the container-side default so the in-container service config doesn't need to know about the remap.
+
+## Step 10: Verify
 
 ```bash
 uv run python src/manage.py check
@@ -359,6 +410,7 @@ All five must pass. Fix any issue rather than silencing it.
 - [ ] `urls.py` mounts `api.urls`
 - [ ] Settings organized via the `dj-settings` skill
 - [ ] `pyproject.toml` has ruff / pyrefly / pytest config
+- [ ] `docker-compose.yml` at project root with top-level `name: <project_slug>` pinning the Compose namespace, plus postgres + redis services with healthchecks
 - [ ] `django check`, ruff, pyrefly, pytest all pass
 
 Once this checklist is complete, the `dj-architecture` and `dj-signals` skills can build features on top without any extra setup.
