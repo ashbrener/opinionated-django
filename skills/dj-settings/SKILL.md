@@ -32,7 +32,7 @@ Settings must appear in this order. Omit sections that have no settings.
 2. **LOGGING**
 3. **SECURITY** — `SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS`, CORS, CSRF, cookie settings
 4. **APPLICATION DEFINITION** — `INSTALLED_APPS`, `MIDDLEWARE`
-5. **URLS AND WSGI** — `ROOT_URLCONF`, `WSGI_APPLICATION`
+5. **URLS AND APPLICATION** — `ROOT_URLCONF`, `ASGI_APPLICATION`, `WSGI_APPLICATION`. ASGI is the default runtime (see `dj-scaffold` Step 9), so `ASGI_APPLICATION = "project.asgi.application"` must be set. `WSGI_APPLICATION` stays in place for tooling that expects it.
 6. **TEMPLATES**
 7. **AUTH** — `AUTH_USER_MODEL`, `AUTH_PASSWORD_VALIDATORS`, `LOGIN_URL`
 8. **DATABASE**
