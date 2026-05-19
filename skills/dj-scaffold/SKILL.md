@@ -72,9 +72,12 @@ Use `uv` for everything. Never `pip` or `poetry`.
 
 ```bash
 uv add 'django>=6.0' 'django-ninja>=1.6' 'pydantic>=2.0' 'svcs>=25.1' \
-       'python-ulid>=3.0' 'celery>=5.4' python-decouple
+       'python-ulid>=3.0' 'celery>=5.4' python-decouple \
+       'gunicorn>=23.0' 'uvicorn[standard]>=0.30'
 uv add --dev ruff 'pyrefly>=0.42' django-stubs pytest pytest-django
 ```
+
+Gunicorn is the process manager; `uvicorn[standard]` provides the ASGI worker class used in Step 10. Both are runtime deps — the project serves ASGI by default, so they belong in the main group.
 
 Pyrefly auto-recognizes Django constructs as long as `django-stubs` is installed — no plugin, no `mypy_django_plugin`-style config. See [pyrefly.org/en/docs/django](https://pyrefly.org/en/docs/django/) for the current support matrix.
 
@@ -334,7 +337,25 @@ pythonpath = ["src"]
 - Django's `QuerySet` typing beyond `.all()` is still thin. Keep chained queryset expressions inside the repository where you can annotate the return type as `list[SomeDTO]` and let the caller rely on that.
 - Pyrefly's Django support is **actively evolving**; re-check the docs when upgrading pyrefly and remove workarounds as they become unnecessary.
 
-## Step 9: Verify
+## Step 9: Server Runtime
+
+Serve the project as ASGI by default. Django supports async views, middleware, and ORM calls, and django-ninja runs comfortably on ASGI — running WSGI now forecloses async work later for no benefit. The standard production invocation is gunicorn supervising uvicorn workers:
+
+```bash
+uv run gunicorn project.asgi:application \
+    -k uvicorn.workers.UvicornWorker \
+    -w 3 \
+    --bind 0.0.0.0:8000
+```
+
+- `project.asgi:application` is the callable already created by `django-admin startproject` in `src/project/asgi.py` — no edits needed.
+- `-k uvicorn.workers.UvicornWorker` swaps gunicorn's default sync worker for an ASGI-capable one.
+- `-w 3` is a sensible starting point; tune to `(2 * CPU) + 1` for the target host.
+- For local development, `uv run uvicorn project.asgi:application --reload` is a lighter alternative to `manage.py runserver` once async views are in play. `runserver` itself still works — it routes through the ASGI handler when an async view is hit.
+
+`src/project/wsgi.py` stays in place for tooling that expects it (some PaaS health probes, legacy management commands), but no entrypoint should target it.
+
+## Step 10: Verify
 
 ```bash
 uv run python src/manage.py check
@@ -348,7 +369,7 @@ All five must pass. Fix any issue rather than silencing it.
 
 ## COMPLETION CHECKLIST
 
-- [ ] Dependencies added via `uv add`
+- [ ] Dependencies added via `uv add` (including `gunicorn` and `uvicorn[standard]`)
 - [ ] `src/project/ids.py` with `_make_generator` helper
 - [ ] `src/project/services.py` with `registry` and `get()`
 - [ ] `src/project/types.py` with `AuthedRequest`
@@ -357,8 +378,9 @@ All five must pass. Fix any issue rather than silencing it.
 - [ ] `src/project/signals.py` with `ReliableSignal` base
 - [ ] `src/project/celery.py` + `__init__.py` export
 - [ ] `urls.py` mounts `api.urls`
-- [ ] Settings organized via the `dj-settings` skill
+- [ ] Settings organized via the `dj-settings` skill (including `ASGI_APPLICATION`)
 - [ ] `pyproject.toml` has ruff / pyrefly / pytest config
+- [ ] Server runtime documented: gunicorn + `uvicorn.workers.UvicornWorker` against `project.asgi:application`
 - [ ] `django check`, ruff, pyrefly, pytest all pass
 
 Once this checklist is complete, the `dj-architecture` and `dj-signals` skills can build features on top without any extra setup.
