@@ -20,7 +20,9 @@ WHITENOISE_MIDDLEWARE = "whitenoise.middleware.WhiteNoiseMiddleware"
 WHITENOISE_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
 WHITENOISE_MANIFEST_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
-SETTINGS_PATH = Path(__file__).resolve().parent.parent / "src" / "project" / "settings.py"
+SETTINGS_PATH = (
+    Path(__file__).resolve().parent.parent / "src" / "project" / "settings.py"
+)
 
 
 def test_whitenoise_middleware_is_installed():
